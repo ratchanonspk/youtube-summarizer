@@ -1,0 +1,9 @@
+.env
+mcp/.venv/
+__pycache__/
+*.pyc
+.DS_Store
+*.md
+!README.md
+*.canvas
+*.base
