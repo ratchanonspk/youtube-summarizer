@@ -1,6 +1,6 @@
 # YouTube Summarizer
 
-Fetches a YouTube video transcript and produces an Obsidian-formatted summary with TL;DR, key takeaways, and notable quotes. Saves the note and raw transcript to your Obsidian vault.
+Fetches a YouTube video transcript and produces a Markdown summary with TL;DR, key takeaways, and notable quotes — saved as a `.md` file. Optionally integrates with Obsidian for a linked note-taking experience.
 
 ## Two ways to run
 
@@ -12,9 +12,7 @@ With the MCP server registered, tell Claude Code in natural language:
 
 Claude Code calls the transcript and saving tools automatically — no API key needed.
 
-### Option B — Terminal fallback (`yt` alias, uses Anthropic API key)
-
-Use this when your Claude.ai subscription usage runs out:
+### Option B — Terminal (`yt` alias, uses Anthropic API key)
 
 ```zsh
 yt https://youtu.be/...
@@ -26,39 +24,71 @@ Requires `ANTHROPIC_API_KEY` in `.env`.
 
 ## Setup
 
-### 1. Install Python dependencies
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/ratchanonspk/youtube-summarizer.git
+cd youtube-summarizer
+```
+
+### 2. Set your output folder
+
+> **Important:** Both scripts have a hardcoded output path you must change before running.
+
+Open **`summarize.py`** and **`mcp/server.py`** and update line 15 / line 10 respectively:
+
+```python
+# Change this to wherever you want your notes saved
+VAULT_DIR = Path("/your/output/folder")
+```
+
+**Examples:**
+| Setup | Path |
+|---|---|
+| No Obsidian (just save files anywhere) | `Path.home() / "Documents" / "summaries"` |
+| Obsidian on Mac | `Path.home() / "Documents" / "Obsidian" / "YourVault"` |
+| Obsidian with iCloud | `Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/YourVault"` |
+| Obsidian with OneDrive | `Path("/Users/yourname/Library/CloudStorage/OneDrive-Personal/Obsidian/YourVault")` |
+
+### 3. Install Python dependencies
 
 For the terminal fallback (`yt` alias):
 ```bash
 pip3 install -r requirements.txt
 ```
 
-For the MCP server (requires Python 3.10+, uses a venv):
+For the MCP server (requires Python 3.10+):
 ```bash
-# Install Homebrew Python if needed: brew install python3
 /opt/homebrew/bin/python3 -m venv mcp/.venv
 mcp/.venv/bin/pip install -r mcp/requirements.txt
 ```
 
-### 2. Add your API key (for terminal fallback only)
+### 4. Add your API key (Option B only)
 
-Create `.env` in the project root:
+Copy the example env file and fill in your key:
 
+```bash
+cp .env.example .env
+```
+
+Then edit `.env`:
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### 3. Register the MCP server with Claude Code
+Get your key at [console.anthropic.com](https://console.anthropic.com).
 
-Add to `~/.claude/settings.json`:
+### 5. Register the MCP server with Claude Code (Option A only)
+
+Add to `~/.claude/settings.json` — replace the paths with your actual clone location:
 
 ```json
 {
   "mcpServers": {
     "youtube-summarizer": {
-      "command": "/Users/ratchanonspk/Library/CloudStorage/OneDrive-Personal/Obsidian/youtube-summarizer/mcp/.venv/bin/python3",
+      "command": "/your/clone/path/mcp/.venv/bin/python3",
       "args": [
-        "/Users/ratchanonspk/Library/CloudStorage/OneDrive-Personal/Obsidian/youtube-summarizer/mcp/server.py"
+        "/your/clone/path/mcp/server.py"
       ]
     }
   }
@@ -67,15 +97,30 @@ Add to `~/.claude/settings.json`:
 
 Then restart Claude Code.
 
-### 4. Add the `yt` alias (for terminal fallback)
+### 6. Add the `yt` alias (Option B only)
 
-Add to `~/.zshrc`:
+Add to `~/.zshrc` — replace the path with your actual clone location:
 
 ```zsh
 yt() {
-  python3 "/Users/ratchanonspk/Library/CloudStorage/OneDrive-Personal/Obsidian/youtube-summarizer/summarize.py" "$1"
+  python3 "/your/clone/path/summarize.py" "$1"
 }
 ```
+
+Then reload your shell:
+```bash
+source ~/.zshrc
+```
+
+---
+
+## Want the Obsidian experience?
+
+Obsidian is a free note-taking app that renders Markdown files and supports `[[wiki-links]]` — the summarizer wraps key terms in these automatically so they become clickable connections between your notes.
+
+1. Download Obsidian at [obsidian.md](https://obsidian.md) (free)
+2. Open Obsidian → **Open folder as vault** → select your output folder
+3. Your summaries will appear as linked notes automatically
 
 ---
 
@@ -83,8 +128,14 @@ yt() {
 
 | File | Location |
 |---|---|
-| Summary note | `Obsidian/Rosetta/<date> <title>.md` |
-| Raw transcript | `Obsidian/Rosetta/Transcripts/<date> <title>.txt` |
+| Summary note | `<VAULT_DIR>/<date> <title>.md` |
+| Raw transcript | `<VAULT_DIR>/Transcripts/<date> <title>.txt` |
+
+Each summary includes:
+- YAML frontmatter (url, date)
+- **TL;DR** — 3-sentence overview
+- **Key Takeaways** — bullet points with `[[wiki-links]]` on key terms
+- **Notable Quotes** — memorable lines from the video
 
 ---
 
@@ -93,10 +144,10 @@ yt() {
 ```
 youtube-summarizer/
 ├── summarize.py       # standalone script (Option B / yt alias)
-├── requirements.txt   # main Python deps
-├── .env               # ANTHROPIC_API_KEY for terminal fallback
+├── requirements.txt   # Python deps for Option B
+├── .env.example       # copy to .env and add your API key
 └── mcp/
-    ├── server.py      # MCP server exposing transcript + saving tools
+    ├── server.py      # MCP server for Option A (Claude Code)
     ├── requirements.txt
-    └── .venv/         # Python 3.14 virtualenv (not committed)
+    └── .venv/         # virtualenv (not committed)
 ```
