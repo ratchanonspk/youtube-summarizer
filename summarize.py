@@ -111,7 +111,12 @@ def _summarize_via_cli(prompt: str) -> str | None:
     """Use the Claude CLI (subscription). Returns None if unavailable or fails."""
     try:
         proc = subprocess.Popen(
-            ["claude", "-p", prompt],
+            [
+                "claude", "-p",
+                "--tools", "",
+                "--system-prompt", "You are a concise text summarizer. Return only the formatted summary as plain text. No preamble, no tool use.",
+                prompt,
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
