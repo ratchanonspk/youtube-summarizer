@@ -109,6 +109,10 @@ def _claude_cli_available() -> bool:
 
 def _summarize_via_cli(prompt: str) -> str | None:
     """Use the Claude CLI (subscription). Returns None if unavailable or fails."""
+    import os
+    # Remove API key so the CLI uses OAuth (subscription) instead of the key.
+    env = os.environ.copy()
+    env.pop("ANTHROPIC_API_KEY", None)
     try:
         proc = subprocess.Popen(
             [
@@ -121,6 +125,7 @@ def _summarize_via_cli(prompt: str) -> str | None:
             stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
+            env=env,
         )
         chunks = []
         for chunk in iter(lambda: proc.stdout.read(64), ""):
