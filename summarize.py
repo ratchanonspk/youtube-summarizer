@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import re
 import sys
-import json
+import subprocess
 from datetime import date
 from pathlib import Path
 
@@ -62,10 +62,8 @@ def get_transcript(video_id: str) -> str:
     return text[:MAX_TRANSCRIPT_CHARS]
 
 
-def summarize(transcript: str, title: str, url: str) -> str:
-    client = anthropic.Anthropic()
-
-    prompt = f"""You are summarizing a YouTube video transcript. Be concise and extract only what is genuinely useful.
+def _build_prompt(transcript: str, title: str, url: str) -> str:
+    return f"""You are summarizing a YouTube video transcript. Be concise and extract only what is genuinely useful.
 
 Video title: {title}
 URL: {url}
@@ -96,7 +94,48 @@ Provide your response in this exact format:
 (omit this section if there are no memorable quotes)
 """
 
-    print("Summarizing with Claude...", flush=True)
+
+def _claude_cli_available() -> bool:
+    try:
+        result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def _summarize_via_cli(prompt: str) -> str | None:
+    """Use the Claude CLI (subscription). Returns None if unavailable or fails."""
+    try:
+        proc = subprocess.Popen(
+            ["claude", "-p", prompt],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+        )
+        chunks = []
+        for chunk in iter(lambda: proc.stdout.read(64), ""):
+            print(chunk, end="", flush=True)
+            chunks.append(chunk)
+        proc.wait(timeout=180)
+        if proc.returncode == 0 and chunks:
+            return "".join(chunks).strip()
+        return None
+    except (FileNotFoundError, OSError):
+        return None
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        return None
+
+
+def _summarize_via_api(prompt: str) -> str:
+    """Use the Anthropic API key (fallback)."""
+    client = anthropic.Anthropic()
     with client.messages.stream(
         model="claude-sonnet-4-6",
         max_tokens=2048,
@@ -107,8 +146,17 @@ Provide your response in this exact format:
         for text in stream.text_stream:
             print(text, end="", flush=True)
             summary += text
-
     return summary
+
+
+def summarize(transcript: str, title: str, url: str, use_cli: bool = True) -> str:
+    prompt = _build_prompt(transcript, title, url)
+    if use_cli:
+        summary = _summarize_via_cli(prompt)
+        if summary is not None:
+            return summary
+        print("\n[Claude subscription failed — falling back to API key]", flush=True)
+    return _summarize_via_api(prompt)
 
 
 def sanitize_filename(title: str) -> str:
@@ -163,8 +211,14 @@ def main():
     transcript = get_transcript(video_id)
     print(f"Transcript length: {len(transcript):,} chars")
 
+    use_cli = _claude_cli_available()
+    if use_cli:
+        print("[Summarizer: Claude subscription]", flush=True)
+    else:
+        print("[Summarizer: Anthropic API key (fallback — Claude CLI not found)]", flush=True)
+
     print("\n" + "=" * 60)
-    summary = summarize(transcript, title, url)
+    summary = summarize(transcript, title, url, use_cli=use_cli)
     print("\n" + "=" * 60)
 
     note_path = save_note(title, url, summary)
